@@ -2,11 +2,9 @@ import os
 import requests
 import csv
 import time
-import json
 import random
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
@@ -31,12 +29,16 @@ def get_access_token():
 def get_emails(domain, token):
     url = "https://api.snov.io/v2/domain-emails-with-info"
     headers = {"Authorization": f"Bearer {token}"}
-    params = {"domain": domain, "type": "all", "limit": 100}            #ESCOGE EL LIMITE DE EMAILS QUE QUIERES LISTAR POR CADA PAGINA
+    params = {"domain": domain, "type": "all", "limit": 20}  # ESCOGE EL LIMITE DE EMAILS QUE QUIERES LISTAR POR CADA PAGINA
     response = requests.get(url, headers=headers, params=params)
     if response.status_code != 200:
         print(f"⚠️ Error al obtener emails para {domain}: {response.status_code}")
         return []
     return [email.get("email", "") for email in response.json().get("emails", [])]
+
+# Función para contar los emails encontrados
+def count_emails(emails):
+    return len(emails)
 
 # Leer listado de empresas desde un archivo
 def read_companies_from_file(filename):
@@ -73,8 +75,14 @@ def extract_companies_from_labelexpo():
 def save_results_to_csv(results, filename):
     with open(filename, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["Empresa", "Dominio", "Correos Electrónicos"])
+        writer.writerow(["Empresa", "Dominio", "Número de Correos Electrónicos"])
         writer.writerows(results)
+
+# Guardar empresas y dominios no encontrados en TXT
+def save_not_found_to_txt(not_found, filename):
+    with open(filename, "w", encoding="utf-8") as file:
+        for company, domain in not_found:
+            file.write(f"{company} -> {domain}\n")
 
 # Proceso principal
 def main():
@@ -82,19 +90,39 @@ def main():
     if not token:
         return
     
-    companies = read_companies_from_file("empresas.txt") #PUEDES CAMBIAR EL NOMBRE DEL ARCHIVO DONDE TENAS LISTADAS TODAS LAS EMPRESAS QUE QUIERES BUSCAR
+    companies = read_companies_from_file("empresas.txt")  # PUEDES CAMBIAR EL NOMBRE DEL ARCHIVO DONDE TENAS LISTADAS TODAS LAS EMPRESAS QUE QUIERES BUSCAR
+    # Lista de extensiones de dominio a buscar, incluyendo más de Europa y populares de EE.UU.
+    extensions = [
+        ".com", ".net", ".org", ".co", ".io", ".biz", 
+        ".es", ".it", ".fr", ".de", ".nl", ".uk", ".pl", ".be", ".ch", ".at", ".se", 
+        ".us", ".gov", ".edu", ".ca", ".au", ".mx", ".jp", ".in", ".br", ".ru"
+    ]
     results = []
+    not_found = []  # Para empresas no encontradas
     
     for company in companies:
-        domain = company.lower().replace(" ", "") + ".com"
-        emails = get_emails(domain, token)
-        print(f"🏢 Empresa: {company} -> 🌐 {domain}")
-        print(f"📧 Emails: {', '.join(emails) if emails else 'No encontrados'}")
-        results.append([company, domain, ', '.join(emails)])
+        found = False
+        for ext in extensions:
+            domain = company.lower().replace(" ", "") + ext
+            emails = get_emails(domain, token)
+            print(f"🏢 Empresa: {company} -> 🌐 {domain}")
+            email_count = count_emails(emails)
+            if email_count > 0:
+                print(f"📧 Emails encontrados: {email_count}")
+                results.append([company, domain, email_count])
+                found = True
+                break  # Si encontramos emails, no seguimos buscando otras extensiones
+            else:
+                print("📧 Emails: No encontrados")
+        if not found:
+            not_found.append((company, domain))  # Guardamos empresa y dominio no encontrado
+
         time.sleep(random.uniform(1, 3))
 
     save_results_to_csv(results, "empresas_info.csv")
+    save_not_found_to_txt(not_found, "no_encontrados.txt")
     print("✅ Datos guardados en empresas_info.csv")
+    print("❌ Empresas y dominios no encontrados guardados en no_encontrados.txt")
 
 if __name__ == "__main__":
     main()
