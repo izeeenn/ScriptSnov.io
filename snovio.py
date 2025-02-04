@@ -29,7 +29,7 @@ def get_access_token():
 def get_emails(domain, token):
     url = "https://api.snov.io/v2/domain-emails-with-info"
     headers = {"Authorization": f"Bearer {token}"}
-    params = {"domain": domain, "type": "all", "limit": 20}  # ESCOGE EL LIMITE DE EMAILS QUE QUIERES LISTAR POR CADA PAGINA
+    params = {"domain": domain, "type": "all", "limit": 100}  # ESCOGE EL LIMITE DE EMAILS QUE QUIERES LISTAR POR CADA PAGINA
     response = requests.get(url, headers=headers, params=params)
     if response.status_code != 200:
         print(f"⚠️ Error al obtener emails para {domain}: {response.status_code}")
@@ -75,7 +75,7 @@ def extract_companies_from_labelexpo():
 def save_results_to_csv(results, filename):
     with open(filename, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["Empresa", "Dominio", "Número de Correos Electrónicos"])
+        writer.writerow(["Empresa", "Dominio", "Número de Correos Electrónicos", "Correos Electrónicos"])
         writer.writerows(results)
 
 # Guardar empresas y dominios no encontrados en TXT
@@ -83,6 +83,12 @@ def save_not_found_to_txt(not_found, filename):
     with open(filename, "w", encoding="utf-8") as file:
         for company, domain in not_found:
             file.write(f"{company} -> {domain}\n")
+
+# Guardar los correos electrónicos encontrados en empresas.txt
+def save_emails_to_txt(results, filename):
+    with open(filename, "a", encoding="utf-8") as file:  # Usamos "a" para agregar al final del archivo sin sobrescribir
+        for company, domain, email_count, emails in results:
+            file.write(f"{company} -> {domain} -> Correos encontrados: {email_count} -> Emails: {emails}\n")
 
 # Proceso principal
 def main():
@@ -109,7 +115,7 @@ def main():
             email_count = count_emails(emails)
             if email_count > 0:
                 print(f"📧 Emails encontrados: {email_count}")
-                results.append([company, domain, email_count])
+                results.append([company, domain, email_count, ', '.join(emails)])
                 found = True
                 break  # Si encontramos emails, no seguimos buscando otras extensiones
             else:
@@ -121,8 +127,10 @@ def main():
 
     save_results_to_csv(results, "empresas_info.csv")
     save_not_found_to_txt(not_found, "no_encontrados.txt")
+    save_emails_to_txt(results, "empresas.txt")  # Guardamos los correos encontrados en empresas.txt
     print("✅ Datos guardados en empresas_info.csv")
     print("❌ Empresas y dominios no encontrados guardados en no_encontrados.txt")
+    print("📧 Correos encontrados guardados en empresas.txt")
 
 if __name__ == "__main__":
     main()
